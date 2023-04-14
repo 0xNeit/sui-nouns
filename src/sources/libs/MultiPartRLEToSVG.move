@@ -4,27 +4,30 @@
 /// @dev Used in NFTDescriptor.move.
 
 module suinouns::MultiPartRLEToSVG {
-    use std::string::String;
+    use std::string::{Self, String};
     use std::vector;
 
-    struct SVGParams {
+    use sui::bcs;
+    // use sui::table::{Self, Table};
+
+    struct SVGParams has drop {
         parts: vector<vector<u8>>,
         background: String
     }
 
-    struct ContentBounds has store {
+    struct ContentBounds has drop, store {
         top: u8,
         right: u8,
         bottom: u8,
         left: u8
     }
 
-    struct Rect has store {
+    struct Rect has copy, drop, store {
         length: u8,
         colorIndex: u8
     }
 
-    struct DecodedImage {
+    struct DecodedImage has drop {
         paletteIndex: u8,
         bounds: ContentBounds,
         rects: vector<Rect>
@@ -33,95 +36,102 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Given RLE image parts and color palettes, merge to generate a single SVG image.
      */
-    /*public fun generateSVG(params: SVGParams, mapping(uint8 => string[]) storage palettes)
-        internal
-        view
-        returns (string memory svg)
-    {
-        // prettier-ignore
-        return string(
-            abi.encodePacked(
-                '<svg width="320" height="320" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">',
-                '<rect width="100%" height="100%" fill="#', params.background, '" />',
-                _generateSVGRects(params, palettes),
-                '</svg>'
-            )
-        );
-    }*/
+    public fun generateSVG(params: SVGParams): String {
+        let svg = string::utf8(b"");
+        let svg_header = string::utf8(b"<svg width='320' height='320' viewBox='0 0 320 320' xmlns='http://www.w3.org/2000/svg' shape-rendering='crispEdges'>");
+        let rect = string::utf8(b"<rect width='100%' height='100%' fill='#");
+        let background = params.background;
+        let rect_tail =  string::utf8(b"' />");
+        let svg_rect = generateSVGRects_(params);
+        let svg_tail = string::utf8(b"</svg>");
+        string::append(&mut svg, svg_header);
+        string::append(&mut svg, rect);
+        string::append(&mut svg, background);
+        string::append(&mut svg, rect_tail);
+        string::append(&mut svg, svg_rect);
+        string::append(&mut svg, svg_tail);
+        
+        return svg
+    }
 
     /**
      * @notice Given RLE image parts and color palettes, generate SVG rects.
      */
     // prettier-ignore
-    /*public fun _generateSVGRects(SVGParams memory params, mapping(uint8 => string[]) storage palettes)
-        private
-        view
-        returns (string memory svg)
-    {
-        string[33] memory lookup = [
-            '0', '10', '20', '30', '40', '50', '60', '70', 
-            '80', '90', '100', '110', '120', '130', '140', '150', 
-            '160', '170', '180', '190', '200', '210', '220', '230', 
-            '240', '250', '260', '270', '280', '290', '300', '310',
-            '320' 
-        ];
-        string memory rects;
-        for (uint8 p = 0; p < params.parts.length; p++) {
-            DecodedImage memory image = _decodeRLEImage(params.parts[p]);
-            string[] storage palette = palettes[image.paletteIndex];
-            uint256 currentX = image.bounds.left;
-            uint256 currentY = image.bounds.top;
-            uint256 cursor;
-            string[16] memory buffer;
-
-            string memory part;
-            for (uint256 i = 0; i < image.rects.length; i++) {
-                Rect memory rect = image.rects[i];
+    public fun generateSVGRects_(params: SVGParams): String {
+        // let lookup = vector[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310, 320];
+        let rects = string::utf8(b"");
+        let p = 0;
+        let len = vector::length(&params.parts);
+        while (p < len) {
+            let image = decodeRLEImage_(*vector::borrow(&params.parts, p));
+            // let palette = table::borrow(&palettes, image.paletteIndex);
+            let currentX = image.bounds.left;
+            let currentY = image.bounds.top;
+            let cursor = 0;
+            let buffer = vector::empty();
+            let part = string::utf8(b"");
+            let i = 0;
+            while (i < len) {
+                let rect = *vector::borrow(&image.rects, i);
                 if (rect.colorIndex != 0) {
-                    buffer[cursor] = lookup[rect.length];          // width
-                    buffer[cursor + 1] = lookup[currentX];         // x
-                    buffer[cursor + 2] = lookup[currentY];         // y
-                    buffer[cursor + 3] = palette[rect.colorIndex]; // color
-
-                    cursor += 4;
+                    vector::insert(&mut buffer, rect.length, cursor);
+                    vector::insert(&mut buffer, currentX, cursor + 1);
+                    vector::insert(&mut buffer, currentY, cursor + 2);
+                    vector::insert(&mut buffer, rect.colorIndex, cursor + 3);
+                    cursor = cursor + 4;
 
                     if (cursor >= 16) {
-                        part = string(abi.encodePacked(part, _getChunk(cursor, buffer)));
+                        string::append(&mut part, getChunk_(cursor, buffer));
                         cursor = 0;
-                    }
-                }
+                    };
+                };
 
-                currentX += rect.length;
+                currentX = currentX + rect.length;
                 if (currentX == image.bounds.right) {
                     currentX = image.bounds.left;
-                    currentY++;
+                    currentY = currentY + 1;
                 }
-            }
+            };
 
             if (cursor != 0) {
-                part = string(abi.encodePacked(part, _getChunk(cursor, buffer)));
-            }
-            rects = string(abi.encodePacked(rects, part));
-        }
-        return rects;
-    }*/
+                string::append(&mut part, getChunk_(cursor, buffer));
+            };
 
+            string::append(&mut rects, part);
+        };
+
+        return rects
+    }
     /**
      * @notice Return a string that consists of all rects in the provided `buffer`.
      */
     // prettier-ignore
-    /*public fun _getChunk(uint256 cursor, string[16] memory buffer) private pure returns (string memory) {
-        string memory chunk;
-        for (uint256 i = 0; i < cursor; i += 4) {
-            chunk = string(
-                abi.encodePacked(
-                    chunk,
-                    '<rect width="', buffer[i], '" height="10" x="', buffer[i + 1], '" y="', buffer[i + 2], '" fill="#', buffer[i + 3], '" />'
-                )
-            );
-        }
-        return chunk;
-    }*/
+    public fun getChunk_(cursor: u64, buffer: vector<u8>): String {
+        let chunk = string::utf8(b"<rec width='");
+        let i = 0;
+        while (i < cursor) {
+            let single_buff = bcs::to_bytes(vector::borrow(&buffer, i));
+            let double_buff = bcs::to_bytes(vector::borrow(&buffer, i + 1));
+            let triple_buff = bcs::to_bytes(vector::borrow(&buffer, i + 2));
+            let quadruple_buff = bcs::to_bytes(vector::borrow(&buffer, i + 3));
+            string::append_utf8(&mut chunk, single_buff);
+            string::append_utf8(&mut chunk, b"' ");
+            string::append_utf8(&mut chunk, b"height='10' x='");
+            string::append_utf8(&mut chunk, double_buff);
+            string::append_utf8(&mut chunk, b"' ");
+            string::append_utf8(&mut chunk, b"y='");
+            string::append_utf8(&mut chunk, triple_buff);
+            string::append_utf8(&mut chunk, b"' ");
+            string::append_utf8(&mut chunk, b"fill='#");
+            string::append_utf8(&mut chunk, quadruple_buff);
+            string::append_utf8(&mut chunk, b"' ");
+            string::append_utf8(&mut chunk, b"/>");
+            i = i + 1;
+        };
+        
+        return chunk
+    }
 
     /**
      * @notice Decode a single RLE compressed image into a `DecodedImage`.
