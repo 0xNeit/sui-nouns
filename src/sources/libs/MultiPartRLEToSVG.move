@@ -57,7 +57,6 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Given RLE image parts and color palettes, generate SVG rects.
      */
-    // prettier-ignore
     public fun generateSVGRects_(params: SVGParams): String {
         // let lookup = vector[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310, 320];
         let rects = string::utf8(b"");
@@ -106,7 +105,6 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Return a string that consists of all rects in the provided `buffer`.
      */
-    // prettier-ignore
     public fun getChunk_(cursor: u64, buffer: vector<u8>): String {
         let chunk = string::utf8(b"<rec width='");
         let i = 0;
