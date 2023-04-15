@@ -4,16 +4,12 @@
 /// @dev Used in NFTDescriptor.move.
 
 module suinouns::MultiPartRLEToSVG {
-    use std::string::{Self, String};
+    use std::string;
     use std::vector;
+    use std::ascii;
 
     use sui::bcs;
     // use sui::table::{Self, Table};
-
-    struct SVGParams has drop {
-        parts: vector<vector<u8>>,
-        background: String
-    }
 
     struct ContentBounds has drop, store {
         top: u8,
@@ -36,34 +32,37 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Given RLE image parts and color palettes, merge to generate a single SVG image.
      */
-    public fun generateSVG(params: SVGParams): String {
+    public fun generateSVG(parts: vector<vector<u8>>, background: vector<u8>): vector<u8> {
         let svg = string::utf8(b"");
         let svg_header = string::utf8(b"<svg width='320' height='320' viewBox='0 0 320 320' xmlns='http://www.w3.org/2000/svg' shape-rendering='crispEdges'>");
         let rect = string::utf8(b"<rect width='100%' height='100%' fill='#");
-        let background = params.background;
+        let background = background;
         let rect_tail =  string::utf8(b"' />");
-        let svg_rect = generateSVGRects_(params);
+        let svg_rect = generateSVGRects_(parts);
         let svg_tail = string::utf8(b"</svg>");
         string::append(&mut svg, svg_header);
         string::append(&mut svg, rect);
-        string::append(&mut svg, background);
+        string::append_utf8(&mut svg, background);
         string::append(&mut svg, rect_tail);
-        string::append(&mut svg, svg_rect);
+        string::append_utf8(&mut svg, svg_rect);
         string::append(&mut svg, svg_tail);
+
+        let to_ascii = string::to_ascii(svg);
+        let to_bytes = ascii::into_bytes(to_ascii);
         
-        return svg
+        return to_bytes
     }
 
     /**
      * @notice Given RLE image parts and color palettes, generate SVG rects.
      */
-    public fun generateSVGRects_(params: SVGParams): String {
+    public fun generateSVGRects_(parts: vector<vector<u8>>): vector<u8> {
         // let lookup = vector[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310, 320];
         let rects = string::utf8(b"");
         let p = 0;
-        let len = vector::length(&params.parts);
+        let len = vector::length(&parts);
         while (p < len) {
-            let image = decodeRLEImage_(*vector::borrow(&params.parts, p));
+            let image = decodeRLEImage_(*vector::borrow(&parts, p));
             // let palette = table::borrow(&palettes, image.paletteIndex);
             let currentX = image.bounds.left;
             let currentY = image.bounds.top;
@@ -81,7 +80,7 @@ module suinouns::MultiPartRLEToSVG {
                     cursor = cursor + 4;
 
                     if (cursor >= 16) {
-                        string::append(&mut part, getChunk_(cursor, buffer));
+                        string::append_utf8(&mut part, getChunk_(cursor, buffer));
                         cursor = 0;
                     };
                 };
@@ -94,18 +93,21 @@ module suinouns::MultiPartRLEToSVG {
             };
 
             if (cursor != 0) {
-                string::append(&mut part, getChunk_(cursor, buffer));
+                string::append_utf8(&mut part, getChunk_(cursor, buffer));
             };
 
             string::append(&mut rects, part);
         };
 
-        return rects
+        let to_ascii = string::to_ascii(rects);
+        let to_bytes = ascii::into_bytes(to_ascii);
+
+        return to_bytes
     }
     /**
      * @notice Return a string that consists of all rects in the provided `buffer`.
      */
-    public fun getChunk_(cursor: u64, buffer: vector<u8>): String {
+    public fun getChunk_(cursor: u64, buffer: vector<u8>): vector<u8> {
         let chunk = string::utf8(b"<rec width='");
         let i = 0;
         while (i < cursor) {
@@ -127,8 +129,11 @@ module suinouns::MultiPartRLEToSVG {
             string::append_utf8(&mut chunk, b"/>");
             i = i + 1;
         };
+
+        let to_ascii = string::to_ascii(chunk);
+        let to_bytes = ascii::into_bytes(to_ascii);
         
-        return chunk
+        return to_bytes
     }
 
     /**
