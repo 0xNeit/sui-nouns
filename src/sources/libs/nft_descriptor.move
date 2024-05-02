@@ -1,35 +1,32 @@
-module suinouns::NFTDescriptor {
+module suinouns::nft_descriptor {
     use std::ascii;
-    use std::string;
-    use std::vector;
+    use std::string::{Self, String};
 
-    use suinouns::Base64;
-    use suinouns::MultiPartRLEToSVG;
-
-    struct TokenURIParams has drop {
-        name: vector<u8>,
-        description: vector<u8>,
-        parts: vector<vector<u8>>,
-        background: vector<u8>,
-        names: vector<vector<u8>>
-    }
+    use suinouns::base64;
+    use suinouns::multipart_rle_to_svg;
 
     /**
-     * @notice Construct an ERC721 token URI.
+     * @notice Construct an NFT token URI.
      */
-    public fun constructTokenURI(params: TokenURIParams): vector<u8> {
-        let parts = params.parts;
-        let background = params.background;
+    public fun construct_token_uri(
+        name: String,
+        description: String,
+        parts: vector<vector<u8>>,
+        background: String,
+        names: vector<String>
+    ): vector<u8> {
+        let parts = parts;
+        let bg = ascii::into_bytes(string::to_ascii(background));
         
-        let image = generateSVGImage(parts, background);
+        let image = generate_svg_image(parts, bg);
 
-        let attributes = generateAttributes(params.names);
+        let attributes = generate_attributes(names);
 
-        let bytes = string::utf8(b"");
+        let mut bytes = string::utf8(b"");
         let first_byte = string::utf8(b"{'name':'}");
-        let second_byte = params.name;
+        let second_byte = name;
         let third_byte = string::utf8(b"', 'description':'");
-        let fourth_byte = params.description;
+        let fourth_byte = description;
         let fifth_byte = string::utf8(b"', 'image':'");
         let sixth_byte = string::utf8(b"data:image/svg+xml;base64,");
         let seventh_byte = image;
@@ -39,9 +36,9 @@ module suinouns::NFTDescriptor {
         let eleventh_byte = attributes;
         let twelveth_byte = string::utf8(b"}");
         string::append(&mut bytes, first_byte);
-        string::append_utf8(&mut bytes, second_byte);
+        string::append(&mut bytes, second_byte);
         string::append(&mut bytes, third_byte);
-        string::append_utf8(&mut bytes, fourth_byte);
+        string::append(&mut bytes, fourth_byte);
         string::append(&mut bytes, fifth_byte);
         string::append(&mut bytes, sixth_byte);
         string::append_utf8(&mut bytes, seventh_byte);
@@ -51,9 +48,9 @@ module suinouns::NFTDescriptor {
         string::append_utf8(&mut bytes, eleventh_byte);
         string::append(&mut bytes, twelveth_byte);
         
-        let encoded = Base64::encode(ascii::into_bytes(string::to_ascii(bytes)));
+        let encoded = base64::encode(ascii::into_bytes(string::to_ascii(bytes)));
 
-        let uri = string::utf8(b"data:application/json;base64,");
+        let mut uri = string::utf8(b"data:application/json;base64,");
         string::append_utf8(&mut uri, encoded);
 
         let uri_bytes = ascii::into_bytes(string::to_ascii(uri));
@@ -62,28 +59,33 @@ module suinouns::NFTDescriptor {
     }
 
     /**
-     * @notice Generate an SVG image for use in the ERC721 token URI.
+     * @notice Generate an SVG image for use in the NFT token URI.
      */
-    public fun generateSVGImage(parts: vector<vector<u8>>, background: vector<u8>): vector<u8> {
-        let svg = MultiPartRLEToSVG::generateSVG(parts, background);
-        let encoded = Base64::encode(svg);
+    public fun generate_svg_image(parts: vector<vector<u8>>, background: vector<u8>): vector<u8> {
+        let svg = multipart_rle_to_svg::generate_svg(parts, background);
+        let encoded = base64::encode(svg);
         return encoded
     }
 
-    public fun generateAttributes(attributes: vector<vector<u8>>): vector<u8> {
-        let traits = string::utf8(b"");
+    fun string_to_vector(s: String): vector<u8> {
+        let bytes = ascii::into_bytes(string::to_ascii(s));
+        return bytes
+    }
+
+    public fun generate_attributes(attributes: vector<String>): vector<u8> {
+        let mut traits = string::utf8(b"");
         let attribute1 = *vector::borrow(&attributes, 0);
         let attribute2 = *vector::borrow(&attributes, 1);
         let attribute3 = *vector::borrow(&attributes, 2);
         let attribute4 = *vector::borrow(&attributes, 3);
         let attribute5 = *vector::borrow(&attributes, 4);
         let attribute6 = *vector::borrow(&attributes, 5);
-        let background = attributeForTypeAndValue(b"Background", attribute1);
-        let body = attributeForTypeAndValue(b"Body", attribute2);
-        let bristles = attributeForTypeAndValue(b"Bristles", attribute3);
-        let accessory = attributeForTypeAndValue(b"Accessory", attribute4);
-        let eyes = attributeForTypeAndValue(b"Eyes", attribute5);
-        let mouth = attributeForTypeAndValue(b"Mouth", attribute6);
+        let background = attribute_for_type_and_value(b"Background", string_to_vector(attribute1));
+        let body = attribute_for_type_and_value(b"Body", string_to_vector(attribute2));
+        let bristles = attribute_for_type_and_value(b"Bristles", string_to_vector(attribute3));
+        let accessory = attribute_for_type_and_value(b"Accessory", string_to_vector(attribute4));
+        let eyes = attribute_for_type_and_value(b"Eyes", string_to_vector(attribute5));
+        let mouth = attribute_for_type_and_value(b"Mouth", string_to_vector(attribute6));
         string::append_utf8(&mut traits, background);
         string::append_utf8(&mut traits, body);
         string::append_utf8(&mut traits, bristles);
@@ -91,7 +93,7 @@ module suinouns::NFTDescriptor {
         string::append_utf8(&mut traits, eyes);
         string::append_utf8(&mut traits, mouth);
         
-        let attr = string::utf8(b"[");
+        let mut attr = string::utf8(b"[");
         string::append(&mut attr, traits);
         string::append_utf8(&mut attr, b"]");
 
@@ -101,8 +103,8 @@ module suinouns::NFTDescriptor {
         return bytes
     }
 
-    public fun attributeForTypeAndValue(traitType: vector<u8>, value: vector<u8>): vector<u8> {
-        let new_string = string::utf8(b"");
+    fun attribute_for_type_and_value(traitType: vector<u8>, value: vector<u8>): vector<u8> {
+        let mut new_string = string::utf8(b"");
         string::append_utf8(&mut new_string, b"{'trait_type':'");
         string::append_utf8(&mut new_string, traitType);
         string::append_utf8(&mut new_string, b"','value':'");

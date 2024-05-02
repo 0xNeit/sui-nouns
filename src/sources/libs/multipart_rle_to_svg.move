@@ -3,27 +3,25 @@
 /// @title A library used to convert multi-part RLE compressed images to SVG
 /// @dev Used in NFTDescriptor.move.
 
-module suinouns::MultiPartRLEToSVG {
+module suinouns::multipart_rle_to_svg {
     use std::string;
-    use std::vector;
     use std::ascii;
 
     use sui::bcs;
-    // use sui::table::{Self, Table};
 
-    struct ContentBounds has drop, store {
+    public struct ContentBounds has drop, store {
         top: u8,
         right: u8,
         bottom: u8,
         left: u8
     }
 
-    struct Rect has copy, drop, store {
+    public struct Rect has copy, drop, store {
         length: u8,
         colorIndex: u8
     }
 
-    struct DecodedImage has drop {
+    public struct DecodedImage has drop {
         paletteIndex: u8,
         bounds: ContentBounds,
         rects: vector<Rect>
@@ -32,13 +30,13 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Given RLE image parts and color palettes, merge to generate a single SVG image.
      */
-    public fun generateSVG(parts: vector<vector<u8>>, background: vector<u8>): vector<u8> {
-        let svg = string::utf8(b"");
+    public fun generate_svg(parts: vector<vector<u8>>, background: vector<u8>): vector<u8> {
+        let mut svg = string::utf8(b"");
         let svg_header = string::utf8(b"<svg width='320' height='320' viewBox='0 0 320 320' xmlns='http://www.w3.org/2000/svg' shape-rendering='crispEdges'>");
         let rect = string::utf8(b"<rect width='100%' height='100%' fill='#");
         let background = background;
         let rect_tail =  string::utf8(b"' />");
-        let svg_rect = generateSVGRects_(parts);
+        let svg_rect = generate_svg_rects(parts);
         let svg_tail = string::utf8(b"</svg>");
         string::append(&mut svg, svg_header);
         string::append(&mut svg, rect);
@@ -56,19 +54,19 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Given RLE image parts and color palettes, generate SVG rects.
      */
-    public fun generateSVGRects_(parts: vector<vector<u8>>): vector<u8> {
+    fun generate_svg_rects(parts: vector<vector<u8>>): vector<u8> {
         // let lookup = vector[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310, 320];
-        let rects = string::utf8(b"");
+        let mut rects = string::utf8(b"");
         let p = 0;
         let len = vector::length(&parts);
         while (p < len) {
-            let image = decodeRLEImage_(*vector::borrow(&parts, p));
+            let image = decode_rle_image(*vector::borrow(&parts, p));
             // let palette = table::borrow(&palettes, image.paletteIndex);
-            let currentX = image.bounds.left;
-            let currentY = image.bounds.top;
-            let cursor = 0;
-            let buffer = vector::empty();
-            let part = string::utf8(b"");
+            let mut currentX = image.bounds.left;
+            let mut currentY = image.bounds.top;
+            let mut cursor = 0;
+            let mut buffer = vector::empty();
+            let mut part = string::utf8(b"");
             let i = 0;
             while (i < len) {
                 let rect = *vector::borrow(&image.rects, i);
@@ -108,8 +106,8 @@ module suinouns::MultiPartRLEToSVG {
      * @notice Return a string that consists of all rects in the provided `buffer`.
      */
     public fun getChunk_(cursor: u64, buffer: vector<u8>): vector<u8> {
-        let chunk = string::utf8(b"<rec width='");
-        let i = 0;
+        let mut chunk = string::utf8(b"<rec width='");
+        let mut i = 0;
         while (i < cursor) {
             let single_buff = bcs::to_bytes(vector::borrow(&buffer, i));
             let double_buff = bcs::to_bytes(vector::borrow(&buffer, i + 1));
@@ -139,7 +137,7 @@ module suinouns::MultiPartRLEToSVG {
     /**
      * @notice Decode a single RLE compressed image into a `DecodedImage`.
      */
-    public fun decodeRLEImage_(image: vector<u8>): DecodedImage {
+    fun decode_rle_image(image: vector<u8>): DecodedImage {
         // extract palette index from byte array
         let paletteIndex = *vector::borrow(&image, 0);
 
@@ -154,9 +152,9 @@ module suinouns::MultiPartRLEToSVG {
         // extract rect information from byte array
         let len = vector::length(&image);
         // let rect_count = (len - 5) / 2;
-        let rects = vector::empty<Rect>();
-        let cursor = 0;
-        let i = 5;
+        let mut rects = vector::empty<Rect>();
+        let mut cursor = 0;
+        let mut i = 5;
         while (i < len) {
             let new_rect = Rect {
                                 length: *vector::borrow(&image, i),

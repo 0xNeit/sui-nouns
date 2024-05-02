@@ -1,16 +1,14 @@
 #[test_only]
 module suinouns::Base64_est{
-    use std::vector;
-    use suinouns::Base64::{encode, decode, encode_64, decode_64};
+    use suinouns::base64::{encode, decode, encode_64, decode_64};
     const ERR_INVALID_LENGTH: u64 = 0;
-    const ERR_INVALID_CHARACTER: u64 = 1;
 
     fun equal(v1: &vector<u8>, v2: &vector<u8>): bool {
          let n = vector::length(v1);
          let m = vector::length(v2);
          if (n != m) return false;
 
-         let i = 0u64;
+         let mut i = 0u64;
          while (i < n) {
              let v1 = vector::borrow(v1, i);
              let v2 = vector::borrow(v2, i);

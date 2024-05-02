@@ -1,17 +1,14 @@
-module suinouns::Ownable {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module suinouns::ownable {
     use sui::event;
 
-    struct Ownership has key {
+    public struct Ownership has key {
         id: UID,
         owner: address
     }
 
-    struct OwnershipTransferred has copy, drop {
-        previousOwner: address,
-        newOwner: address
+    public struct OwnershipTransferred has copy, drop {
+        previous_owner: address,
+        new_owner: address
     }
 
     const ERR_NOT_OWNER: u64 = 0;
@@ -23,19 +20,18 @@ module suinouns::Ownable {
     fun init(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let ownership = Ownership {
-                            id: object::new(ctx),
-                            owner: sender
-                        };
+            id: object::new(ctx),
+            owner: sender
+        };
         transfer::transfer(ownership, sender);
     }
 
     /**
      * @dev Throws if called by any account other than the owner.
      */
-    public fun onlyOwner(owner: &Ownership, ctx: &mut TxContext) {
-        checkOwner_(owner, ctx);
+    public fun only_owner(owner: &Ownership, ctx: &mut TxContext) {
+        check_owner(owner, ctx);
     }
-
 
     /**
      * @dev Returns the address of the current owner.
@@ -48,7 +44,7 @@ module suinouns::Ownable {
     /**
      * @dev Throws if the sender is not the owner.
      */
-    fun checkOwner_(ownership: &Ownership, ctx: &mut TxContext) {
+    fun check_owner(ownership: &Ownership, ctx: &TxContext) {
         let sender = tx_context::sender(ctx);
         assert!(owner(ownership) == sender, ERR_NOT_OWNER);
     }
@@ -60,32 +56,32 @@ module suinouns::Ownable {
      * NOTE: Renouncing ownership will leave the contract without an owner,
      * thereby disabling any public funality that is only available to the owner.
      */
-    public fun renounceOwnership(owner: &mut Ownership, ctx: &mut TxContext) {
-        onlyOwner(owner, ctx);
-        transferOwnership_(owner, @0x0);
+    public fun renounce_ownership(owner: &mut Ownership, ctx: &mut TxContext) {
+        only_owner(owner, ctx);
+        transfer_ownership_internal(owner, @0x0);
     }
 
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * Can only be called by the current owner.
      */
-    public fun transferOwnership(owner: &mut Ownership, newOwner: address, ctx: &mut TxContext) {
-        onlyOwner(owner, ctx);
-        assert!(newOwner != @0x0, ERR_ZERO_ADDRESS);
-        transferOwnership_(owner, newOwner);
+    public fun transfer_ownership(owner: &mut Ownership, new_owner: address, ctx: &mut TxContext) {
+        only_owner(owner, ctx);
+        assert!(new_owner != @0x0, ERR_ZERO_ADDRESS);
+        transfer_ownership_internal(owner, new_owner);
     }
 
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * Internal public fun without access restriction.
      */
-    fun transferOwnership_(owner: &mut Ownership, newOwner: address) {
-        owner.owner = newOwner;
+    fun transfer_ownership_internal(owner: &mut Ownership, new_owner: address) {
+        owner.owner = new_owner;
         
         event::emit(
             OwnershipTransferred {
-                previousOwner: owner.owner,
-                newOwner: newOwner
+                previous_owner: owner.owner,
+                new_owner: new_owner
             }
         );
     }

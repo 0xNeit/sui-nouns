@@ -1,577 +1,694 @@
 module suinouns::NounDescriptor {
+    use std::string::{Self, String};
+    use std::ascii;
 
-    struct Descriptor has key {
+    use sui::vec_map::{Self, VecMap};
+    use sui::event;
+    use sui::bcs;
+
+    use suinouns::ownable::{Self, Ownership};
+    use suinouns::nft_descriptor;
+
+    public struct Descriptor has key {
         id: UID,
-        // Whether or not new Arbinaut parts can be added
-        arePartsLocked: bool,
+        // Whether or not new Noun parts can be added
+        are_parts_locked: bool,
         // Whether or not `tokenURI` should be returned as a data URI (Default: true)
-        isDataURIEnabled : bool, // true;
+        is_data_uri_enabled : bool, // true;
         // Base URI
-        baseURI: vector<u8>,
-        // Arbinaut Color Palettes (Index => Hex Colors)
-        mapping(uint8 => string[]) public override palettes;
-
-        // Arbinaut Backgrounds (Hex Colors)
-        string[] public override bgColors;
-
-        // Arbinaut Backgrounds (Hex Colors)
-        bytes[] public override backgrounds;
-
-        // Arbinaut Bodies (Custom RLE)
-        bytes[] public override bodies;
-
-        // Arbinaut Accessories (Custom RLE)
-        bytes[] public override accessories;
-
-        // Arbinaut Heads (Custom RLE)
-        bytes[] public override heads;
-
-        // Arbinaut Eyes (Custom RLE)
-        bytes[] public override eyes;
-
-    // Arbinaut Eyes (Custom RLE)
-    bytes[] public override mouths;
-
-    // Arbinaut Backgrounds (Hex Colors)
-    string[] public override backgroundNames;
-
-    // Arbinaut Bodies (Custom RLE)
-    string[] public override bodyNames;
-
-    // Arbinaut Accessories (Custom RLE)
-    string[] public override accessoryNames;
-
-    // Arbinaut Heads (Custom RLE)
-    string[] public override headNames;
-
-    // Arbinaut Eyes (Custom RLE)
-    string[] public override eyesNames;
-
-    // Arbinaut Eyes (Custom RLE)
-    string[] public override mouthNames;
-
+        base_uri: String,
+        // Noun Color Palettes (Index => Hex Colors)
+        palettes: VecMap<u8, vector<String>>,
+        // Noun Backgrounds (Hex Colors)
+        bg_colors: vector<String>,
+        // Noun Backgrounds (Hex Colors)
+        backgrounds: vector<vector<u8>>,
+        // Noun Bodies (Custom RLE)
+        bodies: vector<vector<u8>>,
+        // Noun Accessories (Custom RLE)
+        accessories: vector<vector<u8>>,
+        // Noun Heads (Custom RLE)
+        heads: vector<vector<u8>>,
+        // Noun Eyes (Custom RLE)
+        eyes: vector<vector<u8>>,
+        // Noun Eyes (Custom RLE)
+        mouths: vector<vector<u8>>,
+        // Noun Backgrounds (Hex Colors)
+        background_names: vector<String>,
+        // Noun Bodies (Custom RLE)
+        body_names: vector<String>,
+        // Noun Accessories (Custom RLE)
+        accessory_names: vector<String>,
+        // Noun Heads (Custom RLE)
+        head_names: vector<String>,
+        // Noun Eyes (Custom RLE)
+        eyes_names: vector<String>,
+        // Noun Eyes (Custom RLE)
+        mouth_names: vector<String>,
     }
 
-    
-    /**
-     * @notice Require that the parts have not been locked.
-     */
-    modifier whenPartsNotLocked() {
-        require(!arePartsLocked, 'Parts are locked');
-        _;
+    public struct Seed {
+        background: u64,
+        body: u64,
+        accessory: u64,
+        head: u64,
+        eyes: u64,
+        mouth: u64,
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `backgrounds`.
-     */
-    public fun backgroundCount() external view override returns (uint256) {
-        return backgrounds.length;
+    public struct PartsLocked has copy, drop {}
+
+    public struct DataURIToggled has copy, drop {
+        enabled: bool,
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `backgrounds`.
-     */
-    public fun bgColorsCount() external view override returns (uint256) {
-        return bgColors.length;
+    public struct BaseURIUpdated has copy, drop {
+        base_uri: String,
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `bodies`.
-     */
-    public fun bodyCount() external view override returns (uint256) {
-        return bodies.length;
+    const ERR_PARTS_LOCKED: u64 = 100;
+    const ERR_PALETTE_FULL: u64 = 101;
+
+    fun assert_parts_not_locked(descriptor: &Descriptor) {
+        assert!(descriptor.are_parts_locked == false, ERR_PARTS_LOCKED)
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `accessories`.
-     */
-    public fun accessoryCount() external view override returns (uint256) {
-        return accessories.length;
+    fun init(ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+        let descriptor = Descriptor {
+            id: object::new(ctx),
+            are_parts_locked: false,
+            is_data_uri_enabled: true,
+            base_uri: string::utf8(b"https://nouns.wtf/"),
+            palettes: vec_map::empty(),
+            bg_colors: vector::empty(),
+            backgrounds: vector::empty(),
+            bodies: vector::empty(),
+            accessories: vector::empty(),
+            heads: vector::empty(),
+            eyes: vector::empty(),
+            mouths: vector::empty(),
+            background_names: vector::empty(),
+            body_names: vector::empty(),
+            accessory_names: vector::empty(),
+            head_names: vector::empty(),
+            eyes_names: vector::empty(),
+            mouth_names: vector::empty(),
+        };
+
+        transfer::transfer(descriptor, sender);
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `heads`.
-     */
-    public fun headCount() external view override returns (uint256) {
-        return heads.length;
+    public fun background_count(descriptor: &Descriptor): u64 {
+        return descriptor.backgrounds.length()
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `eyes`.
-     */
-    public fun eyesCount() external view override returns (uint256) {
-        return eyes.length;
+    public fun bg_colors_count(descriptor: &Descriptor): u64 {
+        return descriptor.bg_colors.length()
     }
 
-    /**
-     * @notice Get the number of available Arbinaut `mouths`.
-     */
-    public fun mouthCount() external view override returns (uint256) {
-        return mouths.length;
+    public fun body_count(descriptor: &Descriptor): u64 {
+        return descriptor.bodies.length()
     }
 
-    /**
-     * @notice Add colors to a color palette.
-     * @dev This public fun can only be called by the owner.
-     */
-    public fun addManyColorsToPalette(uint8 paletteIndex, string[] calldata newColors) external override onlyOwner {
-        require(palettes[paletteIndex].length + newColors.length <= 264, 'Palettes can only hold 265 colors');
-        for (uint256 i = 0; i < newColors.length; i++) {
-            _addColorToPalette(paletteIndex, newColors[i]);
-        }
+    public fun accessory_count(descriptor: &Descriptor): u64 {
+        return descriptor.accessories.length()
     }
 
-    /**
-     * @notice Batch add Arbinaut backgrounds.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyBgColors(string[] calldata _bgColors) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _bgColors.length; i++) {
-            _addBgColor(_bgColors[i]);
-        }
+    public fun head_count(descriptor: &Descriptor): u64 {
+        return descriptor.heads.length()
     }
 
-    /**
-     * @notice Batch add Arbinaut backgrounds.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyBackgrounds(bytes[] calldata _backgrounds) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _backgrounds.length; i++) {
-            _addBackground(_backgrounds[i]);
-        }
+    public fun eyes_count(descriptor: &Descriptor): u64 {
+        return descriptor.eyes.length()
     }
 
-    /**
-     * @notice Batch add Arbinaut bodies.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyBodies(bytes[] calldata _bodies) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _bodies.length; i++) {
-            _addBody(_bodies[i]);
-        }
+    public fun mouth_count(descriptor: &Descriptor): u64 {
+        return descriptor.mouths.length()
     }
 
-    /**
-     * @notice Batch add Arbinaut accessories.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyAccessories(bytes[] calldata _accessories) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _accessories.length; i++) {
-            _addAccessory(_accessories[i]);
-        }
+    public fun add_many_colors_to_palette(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        palette_index: u8, 
+        new_colors: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        let palettes = descriptor.palettes;
+        let palette = *vec_map::get(&palettes, &palette_index);
+        let palette_length = palette.length();
+        assert!(palette_length + new_colors.length() <= 264, ERR_PALETTE_FULL);
+        let mut i = 0;
+        while ( i < new_colors.length() ) {
+            add_color_to_palette_internal(descriptor, palette_index, new_colors[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut heads.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyHeads(bytes[] calldata _heads) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _heads.length; i++) {
-            _addHead(_heads[i]);
-        }
+    public fun add_many_bg_colors(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_colors: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_colors.length() ) {
+            add_bg_color_internal(descriptor, new_colors[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut eyes.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyEyes(bytes[] calldata _eyes) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _eyes.length; i++) {
-            _addEyes(_eyes[i]);
-        }
+    public fun add_many_backgrounds(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_backgrounds: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_backgrounds.length() ) {
+            add_background_internal(descriptor, new_backgrounds[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut mouths.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyMouths(bytes[] calldata _mouths) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _mouths.length; i++) {
-            _addMouth(_mouths[i]);
-        }
+    public fun add_many_bodies(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_bodies: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_bodies.length() ) {
+            add_body_internal(descriptor, new_bodies[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut background names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyBackgroundNames(string[] calldata _backgroundNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _backgroundNames.length; i++) {
-            _addBackgroundName(_backgroundNames[i]);
-        }
+    public fun add_many_accessories(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_accessories: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_accessories.length() ) {
+            add_accessory_internal(descriptor, new_accessories[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut body names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyBodyNames(string[] calldata _bodyNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _bodyNames.length; i++) {
-            _addBodyName(_bodyNames[i]);
-        }
+    public fun add_many_heads(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_heads: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_heads.length() ) {
+            add_head_internal(descriptor, new_heads[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut accessory names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyAccessoryNames(string[] calldata _accessoryNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _accessoryNames.length; i++) {
-            _addAccessoryName(_accessoryNames[i]);
-        }
+    public fun add_many_eyes(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_eyes: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_eyes.length() ) {
+            add_eyes_internal(descriptor, new_eyes[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut head names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyHeadNames(string[] calldata _headNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _headNames.length; i++) {
-            _addHeadName(_headNames[i]);
-        }
+    public fun add_many_mouths(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_mouths: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_mouths.length() ) {
+            add_mouth_internal(descriptor, new_mouths[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut eyes names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyEyesNames(string[] calldata _eyesNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _eyesNames.length; i++) {
-            _addEyesName(_eyesNames[i]);
-        }
+    public fun add_many_background_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_background_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Batch add Arbinaut mouth names.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addManyMouthNames(string[] calldata _mouthNames) external override onlyOwner whenPartsNotLocked {
-        for (uint256 i = 0; i < _mouthNames.length; i++) {
-            _addMouthName(_mouthNames[i]);
-        }
+    public fun add_many_body_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_body_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Add a single color to a color palette.
-     * @dev This public fun can only be called by the owner.
-     */
-    public fun addColorToPalette(uint8 _paletteIndex, string calldata _color) external override onlyOwner {
-        require(palettes[_paletteIndex].length <= 255, 'Palettes can only hold 256 colors');
-        _addColorToPalette(_paletteIndex, _color);
+    public fun add_many_accessory_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_accessory_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Add a Arbinaut background.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addBgColor(string calldata _bgColor) external override onlyOwner whenPartsNotLocked {
-        _addBgColor(_bgColor);
+    public fun add_many_head_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_head_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Add a Arbinaut background.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addBackground(bytes calldata _background) external override onlyOwner whenPartsNotLocked {
-        _addBackground(_background);
+    public fun add_many_eyes_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_eyes_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Add a Arbinaut body.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addBody(bytes calldata _body) external override onlyOwner whenPartsNotLocked {
-        _addBody(_body);
+    public fun add_many_mouth_names(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_names: vector<String>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        let mut i = 0;
+        while ( i < new_names.length() ) {
+            add_mouth_name_internal(descriptor, new_names[i]);
+            i = i + 1;
+        };
     }
 
-    /**
-     * @notice Add a Arbinaut accessory.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addAccessory(bytes calldata _accessory) external override onlyOwner whenPartsNotLocked {
-        _addAccessory(_accessory);
+    public fun add_color_to_palette(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        palette_index: u8, 
+        new_color: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        add_color_to_palette_internal(descriptor, palette_index, new_color);
     }
 
-    /**
-     * @notice Add a Arbinaut head.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addHead(bytes calldata _head) external override onlyOwner whenPartsNotLocked {
-        _addHead(_head);
+    public fun add_bg_color(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_color: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_bg_color_internal(descriptor, new_color);
     }
 
-    /**
-     * @notice Add Arbinaut eyes.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addEyes(bytes calldata _eyes) external override onlyOwner whenPartsNotLocked {
-        _addEyes(_eyes);
+    public fun add_background(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_background: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_background_internal(descriptor, new_background);
     }
 
-    /**
-     * @notice Add Arbinaut mouth.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addMouth(bytes calldata _mouth) external override onlyOwner whenPartsNotLocked {
-        _addMouth(_mouth);
+    public fun add_body(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_body: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_body_internal(descriptor, new_body);
     }
 
-    /**
-     * @notice Add a Arbinaut background Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addBackgroundName(string calldata _backgroundName) external override onlyOwner whenPartsNotLocked {
-        _addBackgroundName(_backgroundName);
+    public fun add_accessory(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_accessory: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_accessory_internal(descriptor, new_accessory);
     }
 
-    /**
-     * @notice Add a Arbinaut body Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addBodyName(string calldata _bodyName) external override onlyOwner whenPartsNotLocked {
-        _addBodyName(_bodyName);
+    public fun add_head(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_head: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_head_internal(descriptor, new_head);
     }
 
-    /**
-     * @notice Add a Arbinaut accessory Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addAccessoryName(string calldata _accessoryName) external override onlyOwner whenPartsNotLocked {
-        _addAccessoryName(_accessoryName);
+    public fun add_eyes(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_eyes: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_eyes_internal(descriptor, new_eyes);
     }
 
-    /**
-     * @notice Add a Arbinaut head Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addHeadName(string calldata _headName) external override onlyOwner whenPartsNotLocked {
-        _addHeadName(_headName);
+    public fun add_mouth(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_mouth: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_mouth_internal(descriptor, new_mouth);
     }
 
-    /**
-     * @notice Add Arbinaut eyes Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addEyesName(string calldata _eyesName) external override onlyOwner whenPartsNotLocked {
-        _addEyesName(_eyesName);
+    public fun add_background_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_background_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Add Arbinaut mouth Name.
-     * @dev This public fun can only be called by the owner when not locked.
-     */
-    public fun addMouthName(string calldata _mouthName) external override onlyOwner whenPartsNotLocked {
-        _addMouthName(_mouthName);
+    public fun add_body_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_body_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Lock all Arbinaut parts.
-     * @dev This cannot be reversed and can only be called by the owner when not locked.
-     */
-    public fun lockParts() external override onlyOwner whenPartsNotLocked {
-        arePartsLocked = true;
-
-        emit PartsLocked();
+    public fun add_accessory_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_accessory_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Toggle a boolean value which determines if `tokenURI` returns a data URI
-     * or an HTTP URL.
-     * @dev This can only be called by the owner.
-     */
-    public fun toggleDataURIEnabled() external override onlyOwner {
-        bool enabled = !isDataURIEnabled;
-
-        isDataURIEnabled = enabled;
-        emit DataURIToggled(enabled);
+    public fun add_head_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_head_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Set the base URI for all token IDs. It is automatically
-     * added as a prefix to the value returned in {tokenURI}, or to the
-     * token ID if {tokenURI} is empty.
-     * @dev This can only be called by the owner.
-     */
-    public fun setBaseURI(string calldata _baseURI) external override onlyOwner {
-        baseURI = _baseURI;
-
-        emit BaseURIUpdated(_baseURI);
+    public fun add_eyes_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_eyes_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Given a token ID and seed, construct a token URI for an official Arbinauts Treasury arbinaut.
-     * @dev The returned value may be a base64 encoded data URI or an API URL.
-     */
-    public fun tokenURI(uint256 tokenId, IArbinautsSeeder.Seed memory seed) external view override returns (string memory) {
-        if (isDataURIEnabled) {
-            return dataURI(tokenId, seed);
-        }
-        return string(abi.encodePacked(baseURI, tokenId.toString()));
+    public fun add_mouth_name(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        add_mouth_name_internal(descriptor, new_name);
     }
 
-    /**
-     * @notice Given a token ID and seed, construct a base64 encoded data URI for an official Arbinauts Treasury arbinaut.
-     */
-    public fun dataURI(uint256 tokenId, IArbinautsSeeder.Seed memory seed) public view override returns (string memory) {
-        string memory arbinautId = tokenId.toString();
-        string memory name = string(abi.encodePacked('Arbinaut ', arbinautId));
-        string memory description = string(abi.encodePacked('Arbinaut ', arbinautId, ' is a member of the Arbinauts Treasury'));
+    public fun lock_parts(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        assert_parts_not_locked(descriptor);
+        descriptor.are_parts_locked = true;
 
-        return genericDataURI(name, description, seed);
+        event::emit(
+            PartsLocked {}
+        );
     }
 
-    /**
-     * @notice Given a name, description, and seed, construct a base64 encoded data URI.
-     */
-    public fun genericDataURI(
-        string memory name,
-        string memory description,
-        IArbinautsSeeder.Seed memory seed
-    ) public view override returns (string memory) {
-        NFTDescriptor.TokenURIParams memory params = NFTDescriptor.TokenURIParams({
-            name: name,
-            description: description,
-            parts: _getPartsForSeed(seed),
-            background: bgColors[seed.background],
-            names: _getAttributesForSeed(seed)
-        });
-        return NFTDescriptor.constructTokenURI(params, palettes);
+    public fun toggle_data_uri(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        let enabled;
+        if (descriptor.is_data_uri_enabled) {
+            descriptor.is_data_uri_enabled = false;
+            enabled = false;
+        } else {
+            descriptor.is_data_uri_enabled = true;
+            enabled = true;
+        };
+
+        event::emit(
+            DataURIToggled { enabled: enabled }
+        );
     }
 
-    /**
-     * @notice Given a seed, construct a base64 encoded SVG image.
-     */
-    public fun generateSVGImage(IArbinautsSeeder.Seed memory seed) external view override returns (string memory) {
-        MultiPartRLEToSVG.SVGParams memory params = MultiPartRLEToSVG.SVGParams({
-            parts: _getPartsForSeed(seed),
-            background: bgColors[seed.background]
-        });
-        return NFTDescriptor.generateSVGImage(params, palettes);
+    public fun set_base_uri(
+        ownership: &Ownership, 
+        descriptor: &mut Descriptor, 
+        new_base_uri: String,
+        ctx: &mut TxContext
+    ) {
+        ownable::only_owner(ownership, ctx);
+        descriptor.base_uri = new_base_uri;
+
+        event::emit(
+            BaseURIUpdated { base_uri: new_base_uri }
+        );
     }
 
-    /**
-     * @notice Add a single color to a color palette.
-     */
-    public fun _addColorToPalette(uint8 _paletteIndex, string calldata _color) internal {
-        palettes[_paletteIndex].push(_color);
+    public fun token_uri(descriptor: &Descriptor, token_id: u256, seed: &Seed): String {
+        if (descriptor.is_data_uri_enabled) {
+            return data_uri(descriptor, token_id, seed)
+        };
+
+        let noun_id = bcs::to_bytes(&token_id);
+
+        let mut base_uri = descriptor.base_uri;
+
+        string::append_utf8(&mut base_uri, noun_id);
+
+        return base_uri
     }
 
-    /**
-     * @notice Add a Arbinaut background.
-     */
-    public fun _addBgColor(string calldata _bgColor) internal {
-        bgColors.push(_bgColor);
+    public fun data_uri(descriptor: &Descriptor, token_id: u256, seed: &Seed): String {
+        let noun_id = bcs::to_bytes(&token_id);
+        let mut name = string::utf8(b"Noun ");
+        let mut description = string::utf8(b"Noun ");
+        string::append_utf8(&mut name, noun_id);
+        string::append_utf8(&mut description, noun_id);
+        string::append_utf8(&mut description, b" is a member of Nouns DAO.");
+
+        return generic_data_uri(descriptor, name, description, seed)
     }
 
-    /**
-     * @notice Add a Arbinaut background.
-     */
-    public fun _addBackground(bytes calldata _background) internal {
-        backgrounds.push(_background);
+    public fun generic_data_uri(
+        descriptor: &Descriptor,
+        name: String,
+        description: String, 
+        seed: &Seed
+    ): String {
+        let parts = get_parts_for_seed(descriptor, seed);
+        let background = *vector::borrow(&descriptor.bg_colors, seed.background);
+
+        let names = get_attributes_for_seed(descriptor, seed);
+
+        let data = nft_descriptor::construct_token_uri(
+            name,
+            description,
+            parts,
+            background,
+            names
+        );
+
+        return string::utf8(data)
     }
 
-    /**
-     * @notice Add a Arbinaut body.
-     */
-    public fun _addBody(bytes calldata _body) internal {
-        bodies.push(_body);
+    public fun generate_svg_image(descriptor: &Descriptor, seed: &Seed): String {
+        let parts = get_parts_for_seed(descriptor, seed);
+        let background = *vector::borrow(&descriptor.bg_colors, seed.background);
+
+        let to_ascii = string::to_ascii(background);
+        let to_bytes = ascii::into_bytes(to_ascii);
+
+        let image = nft_descriptor::generate_svg_image(parts, to_bytes);
+
+        return string::utf8(image)
     }
 
-    /**
-     * @notice Add a Arbinaut accessory.
-     */
-    public fun _addAccessory(bytes calldata _accessory) internal {
-        accessories.push(_accessory);
+    fun add_color_to_palette_internal(
+        descriptor: &mut Descriptor, 
+        palette_index: u8, 
+        new_color: String
+    ) {
+        let palettes = &mut descriptor.palettes;
+        let palette = vec_map::get_mut(palettes, &palette_index);
+        vector::push_back(palette, new_color);
     }
 
-    /**
-     * @notice Add a Arbinaut head.
-     */
-    public fun _addHead(bytes calldata _head) internal {
-        heads.push(_head);
+    fun add_bg_color_internal(descriptor: &mut Descriptor, new_color: String) {
+        vector::push_back(&mut descriptor.bg_colors, new_color);
     }
 
-    /**
-     * @notice Add Arbinaut eyes.
-     */
-    public fun _addEyes(bytes calldata _eyes) internal {
-        eyes.push(_eyes);
+    fun add_background_internal(descriptor: &mut Descriptor, new_background: vector<u8>) {
+        vector::push_back(&mut descriptor.backgrounds, new_background);
     }
 
-    /**
-     * @notice Add Arbinaut mouth.
-     */
-    public fun _addMouth(bytes calldata _mouth) internal {
-        mouths.push(_mouth);
+    fun add_body_internal(descriptor: &mut Descriptor, new_body: vector<u8>) {
+        vector::push_back(&mut descriptor.bodies, new_body);
     }
 
-    /**
-     * @notice Add a Arbinaut background.
-     */
-    public fun _addBackgroundName(string calldata _backgroundName) internal {
-        backgroundNames.push(_backgroundName);
+    fun add_accessory_internal(descriptor: &mut Descriptor, new_accessory: vector<u8>) {
+        vector::push_back(&mut descriptor.accessories, new_accessory);
     }
 
-    /**
-     * @notice Add a Arbinaut body.
-     */
-    public fun _addBodyName(string calldata _bodyName) internal {
-        bodyNames.push(_bodyName);
+    fun add_head_internal(descriptor: &mut Descriptor, new_head: vector<u8>) {
+        vector::push_back(&mut descriptor.heads, new_head);
     }
 
-    /**
-     * @notice Add a Arbinaut accessory.
-     */
-    public fun _addAccessoryName(string calldata _accessoryName) internal {
-        accessoryNames.push(_accessoryName);
+    fun add_eyes_internal(descriptor: &mut Descriptor, new_eyes: vector<u8>) {
+        vector::push_back(&mut descriptor.eyes, new_eyes);
     }
 
-    /**
-     * @notice Add a Arbinaut head.
-     */
-    public fun _addHeadName(string calldata _headName) internal {
-        headNames.push(_headName);
+    fun add_mouth_internal(descriptor: &mut Descriptor, new_mouth: vector<u8>) {
+        vector::push_back(&mut descriptor.mouths, new_mouth);
     }
 
-    /**
-     * @notice Add Arbinaut eyes.
-     */
-    public fun _addEyesName(string calldata _eyesName) internal {
-        eyesNames.push(_eyesName);
+    fun add_background_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.background_names, new_name);
     }
 
-    /**
-     * @notice Add Arbinaut mouth.
-     */
-    public fun _addMouthName(string calldata _mouthName) internal {
-        mouthNames.push(_mouthName);
+    fun add_body_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.body_names, new_name);
     }
 
-    /**
-     * @notice Get all Arbinaut parts for the passed `seed`.
-     */
-    public fun _getPartsForSeed(IArbinautsSeeder.Seed memory seed) internal view returns (bytes[] memory) {
-        bytes[] memory _parts = new bytes[](6);
-        _parts[0] = backgrounds[seed.background];
-        _parts[1] = bodies[seed.body];
-        _parts[2] = heads[seed.head];
-        _parts[3] = accessories[seed.accessory];
-        _parts[4] = eyes[seed.eyes];
-        _parts[5] = mouths[seed.mouth];
-        return _parts;
+    fun add_accessory_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.accessory_names, new_name);
     }
 
-    /**
-     * @notice Get all Arbinaut attributes for the passed `seed`.
-     */
-    public fun _getAttributesForSeed(IArbinautsSeeder.Seed memory seed) internal view returns (string[] memory) {
-        string[] memory _attributes = new string[](6);
-        _attributes[0] = backgroundNames[seed.background];
-        _attributes[1] = bodyNames[seed.body];
-        _attributes[2] = headNames[seed.head];
-        _attributes[3] = accessoryNames[seed.accessory];
-        _attributes[4] = eyesNames[seed.eyes];
-        _attributes[5] = mouthNames[seed.mouth];
-        return _attributes;
+    fun add_head_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.head_names, new_name);
+    }
+
+    fun add_eyes_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.eyes_names, new_name);
+    }
+
+    fun add_mouth_name_internal(descriptor: &mut Descriptor, new_name: String) {
+        vector::push_back(&mut descriptor.mouth_names, new_name);
+    }
+
+    fun get_parts_for_seed(
+        descriptor: &Descriptor, 
+        seed: &Seed
+    ): vector<vector<u8>> {
+        let mut parts = vector::empty<vector<u8>>();
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.backgrounds, seed.background));
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.bodies, seed.body));
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.accessories, seed.accessory));
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.heads, seed.head));
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.eyes, seed.eyes));
+        vector::push_back(&mut parts, *vector::borrow(&descriptor.mouths, seed.mouth));
+        return parts
+    }
+
+    fun get_attributes_for_seed(
+        descriptor: &Descriptor, 
+        seed: &Seed
+    ): vector<String> {
+        let mut attributes = vector::empty<String>();
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.background_names, seed.background));
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.body_names, seed.body));
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.accessory_names, seed.accessory));
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.head_names, seed.head));
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.eyes_names, seed.eyes));
+        vector::push_back(&mut attributes, *vector::borrow(&descriptor.mouth_names, seed.mouth));
+        return attributes
     }
 }
